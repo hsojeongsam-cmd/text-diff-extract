@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#075E54">
+<title>WhatsApp Incremental Extract</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="./icons/icon.svg">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7f8;
+    --card: #fff;
+    --fg: #111;
+    --muted: #6b7280;
+    --accent: #075E54;
+    --accent-fg: #fff;
+    --danger: #b91c1c;
+    --line: #e5e7eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f0f10;
+      --card: #1a1a1c;
+      --fg: #f3f4f6;
+      --muted: #9ca3af;
+      --line: #2a2a2d;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 4px 0 12px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+    margin: 12px 0;
+  }
+  .drop {
+    text-align: center;
+    padding: 28px 16px;
+    border: 2px dashed var(--line);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .drop.drag { border-color: var(--accent); background: rgba(7,94,84,.06); }
+  .drop strong { display: block; margin-bottom: 4px; }
+  button {
+    font: inherit;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--fg);
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  button.danger { color: var(--danger); border-color: var(--danger); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  input[type=text] {
+    width: 100%; padding: 10px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: var(--card); color: var(--fg);
+    font: inherit;
+  }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .between { justify-content: space-between; }
+  .muted { color: var(--muted); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); }
+  td.actions { white-space: nowrap; }
+  td.actions button { padding: 6px 10px; font-size: 13px; }
+  .stat { font-size: 28px; font-weight: 700; }
+  .stack > * + * { margin-top: 12px; }
+  details summary { cursor: pointer; padding: 4px 0; font-weight: 600; }
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    background: rgba(7,94,84,.1); color: var(--accent); font-size: 12px;
+  }
+  .footer { margin: 24px 0 8px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap stack">
+  <h1>WhatsApp Incremental Extract</h1>
+
+  <div id="drop" class="card drop" tabindex="0" role="button" aria-label="export 파일 선택">
+    <strong>탭하거나 파일을 끌어다 놓으세요</strong>
+    <div class="muted">.zip / .txt · WhatsApp 내보내기 파일</div>
+    <input id="picker" type="file" accept=".zip,.txt,application/zip,text/plain" hidden>
+  </div>
+
+  <div id="result" class="card stack" hidden>
+    <div class="row between">
+      <div>
+        <div class="muted">새 메시지</div>
+        <div class="stat" id="newCount">0</div>
+      </div>
+      <div>
+        <div class="muted">전체</div>
+        <div class="stat" id="totalCount">0</div>
+      </div>
+    </div>
+    <div>
+      <div class="muted" style="margin-bottom: 4px;">채팅 이름</div>
+      <input id="chatName" type="text" placeholder="자동 감지된 이름">
+      <div class="muted" id="resultMeta" style="margin-top: 6px;"></div>
+    </div>
+    <div class="row">
+      <button id="download" class="primary">새 메시지 .txt 저장</button>
+      <button id="commit">상태 갱신만</button>
+      <button id="cancel" class="danger">취소</button>
+    </div>
+  </div>
+
+  <div class="card stack">
+    <div class="row between">
+      <strong>추적 중인 채팅</strong>
+      <button id="refreshList">새로고침</button>
+    </div>
+    <div id="chatList"></div>
+  </div>
+
+  <details class="card">
+    <summary>설정 / 백업</summary>
+    <div class="stack" style="margin-top: 12px;">
+      <div class="row">
+        <button id="exportState">상태 백업 (JSON)</button>
+        <button id="importState">상태 복원</button>
+        <input id="importFile" type="file" accept="application/json" hidden>
+      </div>
+      <div class="row">
+        <button id="forgetAll" class="danger">전체 상태 초기화</button>
+      </div>
+      <div class="muted">
+        모든 처리는 이 단말 안에서만 이루어집니다. 채팅 내용은 외부로 전송되지 않습니다.
+      </div>
+    </div>
+  </details>
+
+  <div class="footer muted" id="version"></div>
+</div>
+
+<script src="./vendor/jszip.min.js" defer></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

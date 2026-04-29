@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Editor / tooling
+.claude/
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+
+# Local test fixtures
+test/
+/tmp/

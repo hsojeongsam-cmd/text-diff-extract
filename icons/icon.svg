@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="WA Extract">
+  <rect width="512" height="512" rx="96" ry="96" fill="#075E54"/>
+  <!-- speech bubble -->
+  <path d="M128 168 h208 a40 40 0 0 1 40 40 v112 a40 40 0 0 1 -40 40 h-128 l-72 56 v-56 h-8 a40 40 0 0 1 -40 -40 v-112 a40 40 0 0 1 40 -40 z"
+        fill="#ffffff"/>
+  <!-- delta / increment glyph -->
+  <path d="M232 320 l24 -88 24 88 z" fill="#075E54"/>
+  <circle cx="216" cy="264" r="10" fill="#075E54"/>
+  <circle cx="296" cy="264" r="10" fill="#075E54"/>
+</svg>
