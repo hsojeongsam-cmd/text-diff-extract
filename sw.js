@@ -1,6 +1,6 @@
 // Service worker: precaches the app shell, intercepts share_target POSTs,
 // and falls back to network-first for navigations.
-const VERSION = "v1";
+const VERSION = "v2";
 const APP_CACHE = `wa-extract-app-${VERSION}`;
 const SHARED_CACHE = "shared-files";
 
@@ -82,13 +82,28 @@ async function cacheFirst(req) {
 }
 
 async function handleShare(request) {
+  const scope = self.registration.scope;
   try {
     const formData = await request.formData();
-    const files = formData.getAll("file").filter((f) => f && f.name);
+    let files = formData.getAll("file").filter((f) => f instanceof File);
+    // Fallback: some senders use a different field name. Scan everything for File entries.
+    if (!files.length) {
+      for (const value of formData.values()) {
+        if (value instanceof File && value.size > 0) files.push(value);
+      }
+    }
+
     const cache = await caches.open(SHARED_CACHE);
     for (const k of await cache.keys()) await cache.delete(k);
-    for (const f of files) {
-      const url = `./shared/${encodeURIComponent(f.name)}`;
+
+    if (!files.length) {
+      return Response.redirect(new URL("?shared=empty", scope).toString(), 303);
+    }
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const safeName = f.name || `share_${i}.bin`;
+      const url = `./shared/${encodeURIComponent(safeName)}`;
       await cache.put(
         new Request(url),
         new Response(f, {
@@ -96,9 +111,9 @@ async function handleShare(request) {
         }),
       );
     }
-    const target = files.length ? "./?shared=1" : "./";
-    return Response.redirect(target, 303);
+    return Response.redirect(new URL("?shared=1", scope).toString(), 303);
   } catch (e) {
-    return new Response("share handler error: " + e.message, { status: 500 });
+    const msg = encodeURIComponent(e && e.message ? e.message : String(e));
+    return Response.redirect(new URL(`?shared=err&msg=${msg}`, scope).toString(), 303);
   }
 }

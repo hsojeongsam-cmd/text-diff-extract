@@ -22,7 +22,7 @@
       "files": [
         {
           "name": "file",
-          "accept": ["text/plain", "application/zip", ".txt", ".zip"]
+          "accept": ["text/plain", "application/zip", "application/octet-stream", ".txt", ".zip"]
         }
       ]
     }

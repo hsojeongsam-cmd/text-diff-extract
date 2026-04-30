@@ -1,6 +1,6 @@
 import { parseMessages, messageHash, inferChatName, chatKey } from "./parser.js";
 
-const APP_VERSION = "0.1.0";
+const APP_VERSION = "0.2.0";
 
 // ─── IndexedDB ────────────────────────────────────────────────────────────────
 const DB_NAME = "wa-extract";
@@ -62,8 +62,21 @@ async function idbAll() {
 }
 
 // ─── File reading ─────────────────────────────────────────────────────────────
+async function detectZip(file) {
+  if (/\.zip$/i.test(file.name)) return true;
+  if (file.type === "application/zip" || file.type === "application/x-zip-compressed") return true;
+  // Magic-byte sniff — WhatsApp share-intent often delivers files as application/octet-stream
+  // and some Android OEM share flows strip extensions, so fall back to looking at the bytes.
+  if (file.size < 4) return false;
+  const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  return head[0] === 0x50 && head[1] === 0x4b
+    && ((head[2] === 0x03 && head[3] === 0x04)
+     || (head[2] === 0x05 && head[3] === 0x06)
+     || (head[2] === 0x07 && head[3] === 0x08));
+}
+
 async function readExportFile(file) {
-  const isZip = /\.zip$/i.test(file.name) || file.type === "application/zip";
+  const isZip = await detectZip(file);
   if (!isZip) {
     return { text: await file.text(), inferredName: inferChatName(file.name) };
   }
@@ -359,16 +372,36 @@ function init() {
 
 async function handleSharedFiles() {
   const url = new URL(location.href);
-  if (!url.searchParams.has("shared")) return;
+  const sharedParam = url.searchParams.get("shared");
+  if (!sharedParam) return;
+
+  const errMsg = url.searchParams.get("msg");
   url.searchParams.delete("shared");
+  url.searchParams.delete("msg");
   history.replaceState({}, "", url.toString());
+
+  if (sharedParam === "err") {
+    alert("공유 파일 처리 실패 (SW): " + (errMsg ? decodeURIComponent(errMsg) : "알 수 없는 오류"));
+    return;
+  }
+  if (sharedParam === "empty") {
+    alert("공유된 파일이 없습니다. WhatsApp에서 'Export chat' 으로 파일 자체를 공유했는지 확인해주세요.");
+    return;
+  }
 
   try {
     const cache = await caches.open("shared-files");
     const requests = await cache.keys();
-    if (!requests.length) return;
+    if (!requests.length) {
+      alert("공유 캐시가 비어있습니다. 다시 시도해주세요.");
+      return;
+    }
     const req = requests[0];
     const resp = await cache.match(req);
+    if (!resp) {
+      alert("캐시된 파일을 읽을 수 없습니다.");
+      return;
+    }
     const blob = await resp.blob();
     const filename = decodeURIComponent(req.url.split("/").pop());
     const file = new File([blob], filename, { type: blob.type });
@@ -376,6 +409,7 @@ async function handleSharedFiles() {
     await processFile(file);
   } catch (e) {
     console.error("shared file handling failed", e);
+    alert("공유 파일 처리 실패: " + e.message);
   }
 }
 
