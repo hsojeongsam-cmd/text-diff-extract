@@ -13,3 +13,11 @@
 # Local test fixtures
 test/
 /tmp/
+
+# Screenshots / debug artifacts pasted into the working dir for triage
+Screenshot*
+screenshot*
+*.png
+*.jpg
+*.jpeg
+!icons/*.png
