@@ -1,6 +1,6 @@
 import { parseMessages, messageHash, inferChatName, chatKey } from "./parser.js";
 
-const APP_VERSION = "0.2.0";
+const APP_VERSION = "0.2.1";
 
 // ─── IndexedDB ────────────────────────────────────────────────────────────────
 const DB_NAME = "wa-extract";
@@ -103,10 +103,25 @@ let pending = null;
 async function processFile(file) {
   setBusy(true);
   try {
+    let zipDetected = false;
+    try { zipDetected = await detectZip(file); } catch {}
     const { text, inferredName } = await readExportFile(file);
     const messages = parseMessages(text);
     if (!messages.length) {
-      alert("메시지를 파싱하지 못했습니다. WhatsApp 내보내기 파일이 맞나요?");
+      const head = (text || "").slice(0, 160);
+      const headSafe = head.replace(/[\x00-\x1F]/g, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`);
+      const isLikelyBinary = /[\x00-\x08\x0E-\x1F]/.test(head);
+      alert(
+        "메시지를 파싱하지 못했습니다.\n\n" +
+        "[진단]\n" +
+        `name: ${file.name || "(empty)"}\n` +
+        `type: ${file.type || "(none)"}\n` +
+        `size: ${file.size}\n` +
+        `zip detected: ${zipDetected ? "yes" : "no"}\n` +
+        `text length: ${(text || "").length}\n` +
+        `binary in head?: ${isLikelyBinary ? "yes" : "no"}\n` +
+        `head: ${headSafe.slice(0, 120)}`
+      );
       return;
     }
 
